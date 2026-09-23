@@ -1,0 +1,18 @@
+create table public.profiles (id uuid primary key references auth.users(id) on delete cascade,full_name text,role text not null default 'learner' check (role in ('learner','admin')),created_at timestamptz not null default now());
+create table public.challenge_progress (user_id uuid not null references auth.users(id) on delete cascade,challenge_id integer not null check (challenge_id between 0 and 35),level text not null check (level in ('Beginner','Intermediate','Pro')),completed_at timestamptz not null default now(),attempts integer not null default 1,primary key (user_id,challenge_id));
+create table public.assessment_results (id bigint generated always as identity primary key,user_id uuid not null references auth.users(id) on delete cascade,assessment_type text not null check (assessment_type in ('assessment','mock')),level text,score integer not null check (score between 0 and 100),passed boolean not null,completed_at timestamptz not null default now());
+alter table public.profiles enable row level security;
+alter table public.challenge_progress enable row level security;
+alter table public.assessment_results enable row level security;
+create policy "Users read own profile" on public.profiles for select using (auth.uid()=id);
+create policy "Users update own profile" on public.profiles for update using (auth.uid()=id);
+create policy "Users read own progress" on public.challenge_progress for select using (auth.uid()=user_id);
+create policy "Users insert own progress" on public.challenge_progress for insert with check (auth.uid()=user_id);
+create policy "Users update own progress" on public.challenge_progress for update using (auth.uid()=user_id);
+create policy "Users read own assessments" on public.assessment_results for select using (auth.uid()=user_id);
+create policy "Users insert own assessments" on public.assessment_results for insert with check (auth.uid()=user_id);
+create index idx_challenge_progress_user_level on public.challenge_progress(user_id,level);
+create index idx_assessment_results_user_completed on public.assessment_results(user_id,completed_at desc);
+create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path=public as $$ begin insert into public.profiles(id,full_name) values(new.id,new.raw_user_meta_data->>'full_name');return new;end;$$;
+create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();
+create or replace view public.level_progress with (security_invoker=true) as select user_id,level,count(*)::integer as completed_challenges,case when level='Beginner' then 18 else 9 end as total_challenges from public.challenge_progress group by user_id,level;
