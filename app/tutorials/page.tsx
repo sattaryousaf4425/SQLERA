@@ -1,2 +1,2 @@
-import Tutorials from '@/components/Tutorials'
-export default function TutorialsPage(){return <Tutorials/>}
+import InteractiveTutorials from '@/components/InteractiveTutorials'
+export default function TutorialsPage(){return <InteractiveTutorials/>}
